@@ -95,7 +95,10 @@ contract StrategyOperationsTest is StrategyFixture {
         strategy.harvest();
         assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
 
-        // TODO: Add some code before harvest #2 to simulate earning yield
+        address cDAI = 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643;
+        uint256 daiBalOfPool = want.balanceOf(cDAI);
+        uint256 amountToAirdrop = daiBalOfPool / 1000;
+        deal(address(want), cDAI, daiBalOfPool + amountToAirdrop);
 
         // Harvest 2: Realize profit
         skip(1);
@@ -103,10 +106,9 @@ contract StrategyOperationsTest is StrategyFixture {
         strategy.harvest();
         skip(6 hours);
 
-        // TODO: Uncomment the lines below
-        // uint256 profit = want.balanceOf(address(vault));
-        // assertGt(want.balanceOf(address(strategy)) + profit, _amount);
-        // assertGt(vault.pricePerShare(), beforePps)
+        uint256 profit = want.balanceOf(address(vault));
+        assertGt(strategy.estimatedTotalAssets() + profit, _amount);
+        assertGt(vault.pricePerShare(), beforePps);
     }
 
     function testChangeDebt(uint256 _amount) public {

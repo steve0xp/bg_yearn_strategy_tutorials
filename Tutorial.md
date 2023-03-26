@@ -23,7 +23,7 @@ This challenge is part of the DeFi Sub-Branch, where students are invited into w
 
 <details markdown='1'><summary>👩🏽‍🏫 More Disclaimers </summary>
 
-This requirement is simply because tying into other protocols is powerful, and with that comes a lot of responsibility when deploying contracts that may end up holding people's actual funds. These tutorials don't do that but they start to show paths for people to build possible fund-holding code. It is key to know what you are doing.
+The required competency is stated simply because tying into other protocols is powerful, and with that comes a lot of responsibility when deploying contracts that may end up holding people's actual funds. These tutorials don't do that but they start to show paths for people to build possible fund-holding code. It is key to know what you are doing.
 
 As well, self-learning is required because tying into DeFi protocols and actual professional crypto projects do not guide developers, step-by-step. If you are new to trying to actually plug into a professional project, no worries! We'll touch on some helpful tips as you sort out what the 'norm' is when going through this process. These tips will be specific to each protocol that we are integrating into and learning about.
 
@@ -47,43 +47,11 @@ To start the project, clone the repo to your local machine using the following C
 
 3. Build the project and make sure everything compiles: `forge build`
 
-#### Testing Against Local Mainnet Fork
-To run unit tests against a non-persistent local mainnet fork, first make sure you have a `.env` file set up at the root (follow `.env.example` format) and populate the `MAINNET_RPC` variable like so:
-
-`MAINNET_RPC=<insert ETH RPC URL here>`
-
-Make sure you are using latest version of foundry, so that it auto-sources `.env`, otherwise run (while in the root directory): `source .env`
-
-CLI command: `forge test -vvv`
-
-You can also test individual contracts with the following:
-- `forge test --match-contract Kernel -vvv`
-- Where `Kernel` is the name of the contract
-
-#### Deploying contracts on Local Mainnet Fork
-To deploy the code onto a persistent mainnet fork, first make sure you have a `.env` file set up at the root (follow `.env.example` format):
-
-- ```MAINNET_RPC=<insert ETH RPC URL here>```
-- ```FORK_URL=<insert your localhost fork url - usually http://localhost:8545>```
-- ```PRIVATE_KEY=<should be the first private key supplied by anvil>```
-
-#### Deploying the base protocol contracts
-
-1. run `source .env` in the base folder
-2. open a new terminal and run `anvil --fork-url $MAINNET_RPC`
-3. copy the first private key from the given private keys into `.env`
-4. run `source .env` to update the `PRIVATE_KEY`
-5. open a new terminal and on the base folder run 
-- ```forge script scripts/DeployProtocol.s.sol:DeployProtocol --fork-url $FORK_URL --broadcast --json  --private-key $PRIVATE_KEY```
-
-- To find the deployed contracts' addresses, head over to `broadcast` folder and find the latest run log.
-
-🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
 ---
 
 ### Simple Yearn Strategy
 
-To kick things off, we'll start by going over the yearn strategy tutorial that Yearn core dev, @cdalton, has gone over in this video. Here he covers making a yearn strategy where we pull DAI from the DAIVault in Yearn and deploy it in a lending pool in Compound. If you're not familiar with Compound, they are an OG lending protocol where users can be lenders and borrowers of whitelisted tokens (deemed legitimate through Compound governance).
+To kick things off, we'll start by going over the yearn strategy tutorial that Yearn core dev, @charlesndalton, has gone over in this video. Here he covers making a yearn strategy where we pull DAI from the DAIVault in Yearn and deploy it in a lending pool in Compound. If you're not familiar with Compound, they are an OG lending protocol where users can be lenders and borrowers of whitelisted tokens (deemed legitimate through Compound governance).
 
 This tutorial goes over:
 
@@ -97,9 +65,20 @@ This tutorial goes over:
 **Accounting VIP Details**
 It's key to know that the strategies take on `debt` from the vaults. AKA some amount of DAI is given to the strategy from the vault. So the strategies below would have some `debt` w/ specified amounts.
 
-Let's touch on the strategy flows:
+Let's first touch on the `harvest` sequences for a typical strategy and then dive a bit deeper into them before coding:
 
-**Strategy Flow #1**
+### **`harvest()` sequence**
+
+Typically, yearn strategies have three asset flow scenarios:
+
+1. Increase Debt Ratio (DR) - vault function `deposit()` is used to deposit funds to strategy. Strategy gets adjusted next time bot(typically a keep3r) calls `harvest()` which also acts as an accounting event.
+
+2. `harvest()` calls `adjustPosition()` which then deposits `wantToken` into strategy assuming `_debtOutstanding = 0`.
+Decrease DR - `vault` function `withdraw()` is used to withdraw a specified `_debtOutstanding` from strategy. Strategy calls `prepareReturn(_debtOutstanding)` which then does the accounting to see if a profit was made or not in this harvest. From there it uses `liquidate(_debtOutstanding)` to exit the strategy with required amount of `wantToken`
+
+3. Keep DR and tend() yields: this is not used as much.
+
+**Strategy Flow #1 Detailed (follows video)**
 
 _Don't worry about the bots, we use OP, a template pattern that extends from the template_
 
@@ -110,7 +89,7 @@ _Don't worry about the bots, we use OP, a template pattern that extends from the
 ![image](./images/StrategyFlow1.png)
 
 
-**Strategy Flow #2**
+**Strategy Flow #2 Detailed (follows video)**
 
 User withdraws from the vault which calls withdraw from the strategy. This further calls a function called `liquidatePosition(amountNeeded)`. If not enough funds then losses are declared (accounting side of things).
 
@@ -172,6 +151,8 @@ want.approve(address(cDAI), type(uint256).max)
 
 Let's name the strategy. There is a typical convention as Facu had pointed out in past yearn strategy tutorial videos.
 
+TODO: insert code
+
 ### `estimatedTotalAssets()` Implementation
 
 Cool, now we'll go into the next typical function, `estimatedTotalAssets()`
@@ -193,8 +174,6 @@ Great! Now we're going to look at the `prepareReturn()` function. It does two th
 
 1. Prepares `wantToken` to be returned
 2. Takes care of accounting (profits and losses since last harvest), and specifies how much debt it can pay back of the `debtOutstanding` in the form of the return param `debtPayment`
-
-
 
 The standard flow of things is to:
 
@@ -314,12 +293,156 @@ function liquidatePosition(uint256 _amountNeeded) internal override returns (uin
 
 </details>
 
+---
+### Try Running Forge Tests
+
 At this point we have all the basic functions written out! Congrats!
 
 Now we'll check that your code actually works. Luckily we're leveraging the working foundry mix from Yearn protocol themselves. Part of their developer relations side of things is to onboard new strategists easily by having them only need to worry about risk vectors associated to their strategy itself. They don't need to worry about the harvest flows, interactions with the vaults, etc. typically! So that means that running `make test` will run the typical integrations tests that are needed to ensure a good working strategy with the rest of the yearn v2 vaults architecture is sound!
 
 _NOTE: `make test` is just a script that ultimately runs a series of `forge test` and you can dig into it more by investigating the yearn foundry mix repo itself with its `package.json`_
 
+Before running your tests you'll need to prepare your `.env` if you haven't already.
+
+> Prepare a `.env` file by copying the `.env.example` file from this repo && populate the necessary environment variables. **Make sure that `.env` is listed in your `.gitignore`!!! It should be by default if you cloned this repo but always make sure.**
+
+Here's some notes on the environment variables you'll need to get:
+
+1. `ETH_RPC_URL`: To deploy the code onto a persistent mainnet fork, you'll need the RPC URL, you can get one from infura or alchemy:
+
+- ```MAINNET_RPC = <insert ETH RPC URL here>```
+
+2. `ETHERSCAN_API_KEY`: Etherscan is the leading block explorer, search, API, and analytics platform for Ethereum. Data from the blockchain can be queried using their avaiable APIs. Head to etherscan.io and set up your account to get your own API keys if you haven't done so already. 
+
+- ```ETHERSCAN_API_KEY = <insert ETHERSCAN_API_KEY here>```
+
+> Make sure you are using latest version of foundry, so that it auto-sources `.env`, otherwise run (while in the root directory): `source .env`
+
+Now test your strategy and run `make test`
+
+At this point you should see that there are some errors actually. Using foundry, you can go through the terminal outputs to find out what went wrong with the code.
+
+There should be two errors that prompt up, and one more as we go along, you'll see 😉
+
+### Troubleshooting
+
+The errors that should have arose at this point are due to the basic integrations tests that Yearn has written up. You can find them in the following directory path: `"./src/test"`
+
+First there's one in `StrategyShutdown.t.sol`:
+
+All the way at the bottom, you'll see a line that states `assertGe(want.balanceOf(address(vault)), _amount); // The vault has all funds`
+
+Replace this with: `assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA);`
+
+What you're doing here is replacing the previous line of code with a foundry cheat code that allows some leweigh in the minute losses seen when carrying out this test. It's not perfect, but sometimes losses occurring through several tx executions is bound to happen.
+
+Basically, the two functions: `liquidateAllPositions()` and `prepareMigration()` need to be written.
+
+**Error #1: `liquidateAllPositions()`**
+
+This function's purpose is to liquidate all active positions in the strategy to obtain the `wantToken`, which in this case is DAI.
+
+Your task is to:
+
+- Liquidate any open strategy positions within the Compound DAI contracts
+- Ensure that the liquidation was successful
+
+Take a crack at it, and try not to look at the solutions as always. 
+
+_hint: recall how you liquidated positions within `withdrawSome()`_
+
+<details markdown='1'><summary>👩🏽‍🏫 Solution Code</summary>
+
+```
+function liquidateAllPositions() internal override returns (uint256) {
+        uint256 _status = cDAI.redeem(cDAI.balanceOf(address(this)));
+        assert(_status == 0);
+        return want.balanceOf(address(this));
+    }
+```
+
+</details>
+
+Now run `make test` and you should see that only one error remains.
+
+**Error #2: `prepareMigration()`**
+
+This function's purpose is to migrate all tokens that are not the `wantToken` to a new strategy. This may happen because of several reasons including upgrades to the strategy itself. This could happen because the underlying protocol undergoes upgrades to newer versions and the older protocol contracts are deemed obsolete or less relevant for the respective strategy.
+
+Now try writing the implementation. Your task is to write the function so it:
+
+- transfers cDAI from this strategy to a new specified address of the new strategy.
+
+_hint: recall how you liquidated positions within `withdrawSome()`_
+
+<details markdown='1'><summary>👩🏽‍🏫 Solution Code</summary>
+
+```
+    function prepareMigration(address _newStrategy) internal override {
+        cDAI.transfer(_newStrategy, cDAI.balanceOf(address(this)));
+    }
+```
+
+</details>
+
+Awesome!!! Now if you run `make test` again you should only see one new failing test. Let's take a look at that one now. It is in the `StrategyOperation.t.sol` file though, and not in your `Strategy.sol` code itself.
+
+Here's a great opportunity to get familiar a bit with how one writes tests with foundry. Foundry enables many functionalities, but a key one is that it keeps development all within Solidity (smart contracts and test writing). There are clear advantages to this when thinking about the nuances that arise when working with EthersJS alternatively. As well the speed of foundry testing is very fast for running things like fuzzing tests.
+
+Open up `StrategyOperations.t.sol` and you should see some TODOs under `testProfitableHarvest(uint256 _amount)`. Here you'll need to write the test code to do the following:
+
+- 'Fake' the simulation of accruing yield in the compound strategy through airdropping DAI into the cDAI contract. You might think that this should be associated to the user depositing into the yearn strategy, but since the yearn strategy already allocated DAI to the cDAI contract on behalf of the user, then the accounting within the yearn vaults should provide the user some yield with respect to when they entered the vault and the strategy.
+
+<details markdown='1'><summary>👩🏽‍🏫 Solution Code</summary>
+
+```
+    function testProfitableHarvest(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmt && _amount < maxFuzzAmt);
+        deal(address(want), user, _amount);
+
+        // Deposit to the vault
+        vm.prank(user);
+        want.approve(address(vault), _amount);
+        vm.prank(user);
+        vault.deposit(_amount);
+        assertRelApproxEq(want.balanceOf(address(vault)), _amount, DELTA);
+
+        uint256 beforePps = vault.pricePerShare();
+
+        // Harvest 1: Send funds through the strategy
+        skip(1);
+        vm.prank(strategist);
+        strategy.harvest();
+        assertRelApproxEq(strategy.estimatedTotalAssets(), _amount, DELTA);
+
+        address cDAI = 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643;
+        uint256 daiBalOfPool = want.balanceOf(cDAI);
+        uint256 amountToAirdrop = daiBalOfPool / 1000;
+        deal(address(want), cDAI, daiBalOfPool + amountToAirdrop);
+
+        // Harvest 2: Realize profit
+        skip(1);
+        vm.prank(strategist);
+        strategy.harvest();
+        skip(6 hours);
+
+        uint256 profit = want.balanceOf(address(vault));
+        assertGt(strategy.estimatedTotalAssets() + profit, _amount);
+        assertGt(vault.pricePerShare(), beforePps);
+    }
+```
+
+</details>
+
+Now with all that done, run `make test` one more time.
+
+Whew, at this point it should be passing the basic integrations yearn strategy tests though. Further diligence in writing more robust tests is needed followed by detailed peer reviews and audits if you want to see your strategy go to production in Yearn's testing grounds: www.ape.tax
+
+###
+
+**Congratulations!!! You just finished writing your first simple yearn strategy!!!**
+
+As mentioned, this is just a tutorial so don't go deploying this on mainnet yourself with the expectation that it is safe. This tutorial is meant to teach the basics, and there already is a compound strategy that Yearn uses for DAI!
 
 
 ---
